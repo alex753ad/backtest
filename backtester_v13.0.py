@@ -243,7 +243,8 @@ def run_backtest(prices1, prices2, timeframe='4h', entry_z=2.0, exit_z=0.8,
                  stop_z=4.0, max_bars=50, min_bars=2, commission_pct=0.1,
                  slippage_pct=0.05,
                  adaptive_entry=True, trailing_stop=True,
-                 walk_forward=False, wf_train_pct=0.70):
+                 walk_forward=False, wf_train_pct=0.70,
+                 take_profit_pct=1.5):
     """Walk-forward backtest with trailing stop and hard pre-filters."""
     n = min(len(prices1), len(prices2))
     p1, p2 = prices1[:n], prices2[:n]
@@ -482,6 +483,10 @@ def run_backtest(prices1, prices2, timeframe='4h', entry_z=2.0, exit_z=0.8,
                     exit_type = 'OVERSHOOT'
                 elif position['direction'] == 'SHORT' and z < -0.5:
                     exit_type = 'OVERSHOOT'
+                
+                # v22: Take profit cap — exit if PnL >= take_profit_pct
+                if take_profit_pct > 0 and pnl >= take_profit_pct:
+                    exit_type = 'TAKE_PROFIT'
             
             # Trailing stop — if PnL was ≥0.8% but now drops to 40% of peak
             if trailing_stop and position['trailing_active'] and pnl <= position['best_pnl'] * 0.4 and bars_held >= min_hold:
@@ -591,7 +596,7 @@ def run_backtest(prices1, prices2, timeframe='4h', entry_z=2.0, exit_z=0.8,
 
 st.set_page_config(page_title="Pairs Backtester", page_icon="📊", layout="wide")
 st.title("📊 Pairs Trading Backtester")
-st.caption("v13.0 | 22.02.2026 | Realistic exits (exit_z=0.8, stop+1.5, trailing 40%)")
+st.caption("v14.0 | 24.02.2026 | Take Profit cap (1.5-2%) + Realistic exits")
 
 with st.sidebar:
     st.header("⚙️ Настройки")
@@ -625,6 +630,8 @@ with st.sidebar:
                           help="v7.0: Bid/Ask спред + market impact. 0.05% для ликвидных пар")
     trailing_stop = st.checkbox("🔄 Trailing Stop", value=True,
                                 help="При PnL≥1% — стоп сдвигается. Если PnL упал до 0% → выход.")
+    take_profit_pct = st.slider("💰 Take Profit (%)", 0.0, 5.0, 1.5, step=0.1,
+                                 help="v22: Фиксировать прибыль при PnL >= X%. 0=отключено. Рекомендуется 1.5-2%.")
     walk_forward = st.checkbox("📊 Walk-Forward", value=False,
                                help="70% train / 30% test — показывает реальную производительность")
 
@@ -668,7 +675,7 @@ if mode == "🔍 Одна пара":
                 entry_z=entry_z, exit_z=exit_z, stop_z=stop_z,
                 max_bars=max_bars, commission_pct=commission, slippage_pct=slippage,
                 adaptive_entry=adaptive_entry, trailing_stop=trailing_stop,
-                walk_forward=walk_forward)
+                walk_forward=walk_forward, take_profit_pct=take_profit_pct)
         
         if error and result is None:
             st.error(f"❌ {error}"); st.stop()
@@ -865,7 +872,8 @@ elif mode == "🔄 Автоскан":
                 timeframe=timeframe, entry_z=entry_z, exit_z=exit_z, stop_z=stop_z,
                 max_bars=max_bars, commission_pct=commission, slippage_pct=slippage,
                 adaptive_entry=adaptive_entry,
-                trailing_stop=trailing_stop, walk_forward=walk_forward)
+                trailing_stop=trailing_stop, walk_forward=walk_forward,
+                take_profit_pct=take_profit_pct)
             
             pt = result['pre_trade'] if result else {}
             if result and result['stats']:
